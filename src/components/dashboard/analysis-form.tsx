@@ -4,83 +4,80 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
 
-export function AnalysisForm({ onAnalyze }: { onAnalyze: (type: string, content: string) => void }) {
-  const [isLoading, setIsLoading] = useState(false);
+export function AnalysisForm({
+  onAnalyze,
+  isLoading
+}: {
+  onAnalyze: (type: string, content: string) => void;
+  isLoading?: boolean;
+}) {
   const [text, setText] = useState("");
   const [url, setUrl] = useState("");
 
-  const handleSubmit = async (e: React.FormEvent, type: "text" | "url") => {
+  const handleSubmit = (e: React.FormEvent, type: "text" | "url") => {
     e.preventDefault();
-    setIsLoading(true);
     const content = type === "text" ? text : url;
-
-    // Simulate API call for now
-    await new Promise(resolve => setTimeout(resolve, 1500));
-
+    if (!content) return;
     onAnalyze(type, content);
-    setIsLoading(false);
   };
 
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <CardTitle>Analyze Copy</CardTitle>
-        <CardDescription>
-          Paste your marketing copy or a URL to receive behavioral insights.
+    <Card className="w-full shadow-sm border-border/50">
+      <CardHeader className="pb-4">
+        <CardTitle className="text-base">Analyze Copy</CardTitle>
+        <CardDescription className="text-xs">
+          Provide context for the AI engine to evaluate.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <Tabs defaultValue="text" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-6">
-            <TabsTrigger value="text">Paste Text</TabsTrigger>
-            <TabsTrigger value="url">Website URL</TabsTrigger>
+        <Tabs defaultValue="url" className="w-full">
+          <TabsList className="grid w-full grid-cols-2 mb-4 h-9">
+            <TabsTrigger value="url" className="text-xs">URL</TabsTrigger>
+            <TabsTrigger value="text" className="text-xs">Raw Text</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="text">
-            <form onSubmit={(e) => handleSubmit(e, "text")} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="copy">Marketing Copy</Label>
-                <Textarea
-                  id="copy"
-                  placeholder="Paste your landing page, email, or ad copy here..."
-                  className="min-h-[200px]"
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  required
-                />
-              </div>
-              <Button type="submit" disabled={isLoading || !text} className="w-full">
-                {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Analyzing...</> : "Generate Insights"}
-              </Button>
-            </form>
-          </TabsContent>
-
-          <TabsContent value="url">
+          <TabsContent value="url" className="mt-0">
             <form onSubmit={(e) => handleSubmit(e, "url")} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="url">Website URL</Label>
                 <Input
                   id="url"
                   type="url"
                   placeholder="https://example.com"
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
+                  className="bg-muted/50"
                   required
                 />
-                <p className="text-sm text-muted-foreground">
-                  Our system will scrape the URL, extract the core messaging, and analyze it.
-                </p>
               </div>
-              <Button type="submit" disabled={isLoading || !url} className="w-full">
-                {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Analyzing...</> : "Scrape & Analyze"}
+              <Button type="submit" disabled={isLoading || !url} className="w-full shadow-none">
+                {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Analyzing...</> : "Run Analysis"}
               </Button>
             </form>
           </TabsContent>
+
+          <TabsContent value="text" className="mt-0">
+            <form onSubmit={(e) => handleSubmit(e, "text")} className="space-y-4">
+              <div className="space-y-2">
+                <Textarea
+                  id="copy"
+                  placeholder="Paste landing page, email, or ad copy..."
+                  className="min-h-[160px] resize-none bg-muted/50 text-sm"
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  required
+                />
+              </div>
+              <Button type="submit" disabled={isLoading || !text} className="w-full shadow-none">
+                {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Analyzing...</> : "Run Analysis"}
+              </Button>
+            </form>
+          </TabsContent>
+
         </Tabs>
       </CardContent>
     </Card>
