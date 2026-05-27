@@ -56,7 +56,7 @@ export default function HistoryPage() {
                   </div>
                   <Badge variant="outline" className="bg-background">
 
-                    {(record.result as Record<string, unknown>)?.overallScore || 'N/A'} Overall
+                    {String((record.result as Record<string, unknown>)?.overallScore || 'N/A')} Overall
                   </Badge>
                 </div>
               </CardHeader>
