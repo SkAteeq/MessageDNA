@@ -1,196 +1,207 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useState } from "react";
+import { experimental_useObject as useObject } from '@ai-sdk/react';
 import { AnalysisForm } from "@/components/dashboard/analysis-form";
-import { MetricsGrid } from "@/components/dashboard/metrics-grid";
 import { Scorecard } from "@/components/dashboard/scorecard";
-import { Separator } from "@/components/ui/separator";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { useAppStore } from "@/lib/store";
+import { AlertCircle, ChevronRight, Loader2, PlayCircle } from "lucide-react";
+import { z } from 'zod';
 
-interface Metric {
-  title: string;
-  description: string;
-  score: number;
-  status: "critical" | "warning" | "optimal";
-  details: string[];
-}
-
-interface Rewrite {
-  title: string;
-  focus: string;
-  content: string;
-}
-
-interface AnalysisResult {
-  metrics?: Metric[];
-  rewrites?: Rewrite[];
-}
+const AnalysisSchemaClient = z.object({
+  extractedSummary: z.string(),
+  overallScore: z.number(),
+  keyFindings: z.array(
+    z.object({
+      category: z.string(),
+      finding: z.string(),
+      impact: z.string(),
+      recommendation: z.string()
+    })
+  ),
+  metrics: z.array(
+    z.object({
+      title: z.string(),
+      description: z.string(),
+      score: z.number(),
+      status: z.enum(['critical', 'warning', 'optimal']),
+      details: z.array(z.string())
+    })
+  ),
+  rewrites: z.array(
+    z.object({
+      title: z.string(),
+      focus: z.string(),
+      content: z.string()
+    })
+  )
+});
 
 export default function DashboardPage() {
   const [hasAnalyzed, setHasAnalyzed] = useState(false);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [originalContent, setOriginalContent] = useState("");
-  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+  const [analysisType, setAnalysisType] = useState<"text" | "url">("text");
 
-  const handleAnalyze = async (type: string, content: string) => {
-    setIsAnalyzing(true);
-    setHasAnalyzed(false);
-    setOriginalContent(content);
-    setAnalysisResult(null);
+  const { addAnalysis } = useAppStore();
 
-    try {
-      const res = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ type, content })
-      });
-
-      if (!res.ok) {
-        throw new Error('Failed to analyze');
+  const { object, submit, isLoading, error } = useObject({
+    api: '/api/analyze',
+    schema: AnalysisSchemaClient,
+    onFinish: (result) => {
+      if (result.object) {
+        addAnalysis({
+          id: Date.now().toString(),
+          type: analysisType,
+          content: originalContent,
+          date: new Date().toISOString(),
+          result: result.object as Record<string, unknown>,
+        });
       }
-
-      const data = await res.json();
-      setAnalysisResult(data);
-    } catch (error) {
-      console.error('Analysis failed:', error);
-      // Fallback for mock view if API fails (e.g. no OpenAI key)
-    } finally {
-      setIsAnalyzing(false);
-      setHasAnalyzed(true);
     }
+  });
+
+  const handleAnalyze = (type: string, content: string) => {
+    setAnalysisType(type as "text" | "url");
+    setHasAnalyzed(true);
+    setOriginalContent(content);
+    submit({ type, content });
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Intelligence Dashboard</h1>
-        <p className="text-muted-foreground mt-2">
-          Run behavioral psychology and persuasion science models on your marketing copy.
+    <div className="space-y-8 animate-in fade-in duration-500 max-w-7xl mx-auto">
+      <div className="flex flex-col gap-2">
+        <h1 className="text-3xl font-semibold tracking-tight">Conversion Analysis</h1>
+        <p className="text-muted-foreground">
+          Deep structural analysis of messaging, clarity, and persuasion vectors.
         </p>
       </div>
 
-      <div className="grid gap-8 md:grid-cols-12">
-        <div className="md:col-span-5 lg:col-span-4 flex flex-col gap-6">
-          <AnalysisForm onAnalyze={handleAnalyze} />
+      <div className="grid gap-8 lg:grid-cols-12">
+        <div className="lg:col-span-4 flex flex-col gap-6">
+          <AnalysisForm onAnalyze={handleAnalyze} isLoading={isLoading} />
 
           {hasAnalyzed && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">Original Content Segment</CardTitle>
+            <Card className="border-border/50 shadow-sm">
+              <CardHeader className="bg-muted/30 pb-4">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <PlayCircle className="w-4 h-4 text-muted-foreground" />
+                  Analyzed Source
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  {analysisType === 'url' ? 'Extracted content from URL' : 'Direct input text'}
+                </CardDescription>
               </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground line-clamp-6 italic bg-muted/50 p-3 rounded-md">
-                  &quot;{originalContent || 'No content provided.'}&quot;
+              <CardContent className="pt-4">
+                <p className="text-xs text-muted-foreground line-clamp-6 leading-relaxed whitespace-pre-wrap">
+                  {object?.extractedSummary || originalContent}
                 </p>
               </CardContent>
             </Card>
           )}
         </div>
 
-        <div className="md:col-span-7 lg:col-span-8 flex flex-col gap-8">
-          {isAnalyzing ? (
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-lg font-medium mb-4">Behavioral Metrics</h3>
-                <MetricsGrid isLoading={true} />
+        <div className="lg:col-span-8 flex flex-col gap-8">
+          {!hasAnalyzed ? (
+            <div className="h-full flex items-center justify-center border border-dashed rounded-xl p-12 text-center bg-muted/5 min-h-[400px]">
+              <div className="max-w-sm space-y-3">
+                <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                  <span className="text-primary text-xl">⚡️</span>
+                </div>
+                <h3 className="text-lg font-medium">Ready for analysis</h3>
+                <p className="text-sm text-muted-foreground">
+                  Paste a URL or raw text. We&apos;ll extract the core messaging and evaluate its psychological friction and conversion readiness.
+                </p>
               </div>
-              <Separator />
-              <div className="h-64 rounded-xl bg-muted animate-pulse" />
             </div>
-          ) : hasAnalyzed ? (
-            <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-700">
-              <section>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold tracking-tight">Behavioral Intelligence Metrics</h3>
-                </div>
-                {analysisResult && analysisResult.metrics ? (
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                    {analysisResult.metrics.map((metric: Metric, i: number) => (
-                      <Scorecard key={i} {...metric} />
-                    ))}
-                  </div>
-                ) : (
-                  <MetricsGrid /> // Fallback mock
-                )}
-              </section>
-
-              <Separator />
-
-              <section>
-                <div className="flex items-center justify-between mb-4">
+          ) : (
+            <div className="space-y-8">
+              {error && (
+                <div className="p-4 rounded-md bg-destructive/10 text-destructive text-sm border border-destructive/20 flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
                   <div>
-                    <h3 className="text-lg font-semibold tracking-tight">AI Rewrite Variations</h3>
-                    <p className="text-sm text-muted-foreground">Optimized for specific psychological triggers.</p>
+                    <p className="font-medium">Analysis failed</p>
+                    <p className="mt-1 opacity-90">{error.message}</p>
                   </div>
-                  <Button variant="outline" size="sm">Regenerate All</Button>
+                </div>
+              )}
+
+              <section className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-medium tracking-tight">Key Findings</h3>
+                  {isLoading && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
                 </div>
 
-                <div className="grid gap-4">
-                  {analysisResult && analysisResult.rewrites ? (
-                    analysisResult.rewrites.map((rewrite: Rewrite, i: number) => (
-                      <Card key={i}>
-                        <CardHeader className="py-3 px-4 bg-muted/30 border-b">
-                          <div className="flex items-center justify-between">
-                            <CardTitle className="text-sm font-medium">{rewrite.title}</CardTitle>
-                            <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full font-medium">
-                              {rewrite.focus} Focus
-                            </span>
-                          </div>
-                        </CardHeader>
-                        <CardContent className="p-4 text-sm">
-                          {rewrite.content}
-                        </CardContent>
-                      </Card>
+                <div className="grid gap-3">
+                  {!object?.keyFindings?.length && isLoading ? (
+                    Array.from({ length: 3 }).map((_, i) => (
+                      <div key={i} className="h-24 bg-muted/40 rounded-lg animate-pulse" />
                     ))
                   ) : (
-                    // Mock Rewrites
-                    <>
-                      <Card>
-                        <CardHeader className="py-3 px-4 bg-muted/30 border-b">
-                          <div className="flex items-center justify-between">
-                            <CardTitle className="text-sm font-medium">High-Trust Variant</CardTitle>
-                            <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full font-medium">
-                              Trust Deficit Focus
-                            </span>
+                    object?.keyFindings?.map((finding: any, i: number) => (
+                      <Card key={i} className="border-border/50 shadow-sm overflow-hidden">
+                        <div className="flex border-l-4 border-primary">
+                          <div className="p-4 flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Badge variant={finding.impact === 'High' ? 'destructive' : finding.impact === 'Medium' ? 'default' : 'secondary'} className="text-[10px] px-1.5 py-0">
+                                {finding.impact} Impact
+                              </Badge>
+                              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                                {finding.category}
+                              </span>
+                            </div>
+                            <p className="text-sm font-medium leading-snug mb-2">{finding.finding}</p>
+                            <div className="bg-muted/40 p-2 rounded text-xs text-muted-foreground flex items-start gap-2">
+                              <ChevronRight className="w-3.5 h-3.5 shrink-0 mt-0.5 text-primary" />
+                              <p>{finding.recommendation}</p>
+                            </div>
                           </div>
-                        </CardHeader>
-                        <CardContent className="p-4 text-sm">
-                          Join 10,000+ marketing teams increasing conversions by 24% on average. Guaranteed results in 30 days or your money back. Start your free trial today.
-                        </CardContent>
+                        </div>
                       </Card>
-
-                      <Card>
-                        <CardHeader className="py-3 px-4 bg-muted/30 border-b">
-                          <div className="flex items-center justify-between">
-                            <CardTitle className="text-sm font-medium">Urgency Variant</CardTitle>
-                            <span className="text-xs bg-amber-500/10 text-amber-500 px-2 py-1 rounded-full font-medium">
-                              Emotional Activation Focus
-                            </span>
-                          </div>
-                        </CardHeader>
-                        <CardContent className="p-4 text-sm">
-                          Stop losing customers to poor messaging. Lock in our early-access pricing before it increases next week. Only 40 spots remaining for the beta program.
-                        </CardContent>
-                      </Card>
-                    </>
+                    ))
                   )}
                 </div>
               </section>
-            </div>
-          ) : (
-            <div className="h-full flex items-center justify-center border-2 border-dashed rounded-xl p-12 text-center bg-muted/10">
-              <div className="max-w-sm space-y-2">
-                <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                  <span className="text-primary text-xl">✨</span>
-                </div>
-                <h3 className="text-xl font-semibold">Awaiting Input</h3>
-                <p className="text-sm text-muted-foreground">
-                  Paste your copy or a URL on the left to generate proprietary behavioral metrics and highly optimized AI rewrites.
-                </p>
-              </div>
+
+              {object?.metrics && object.metrics.length > 0 && (
+                <section className="space-y-4">
+                  <h3 className="text-lg font-medium tracking-tight">Structural Metrics</h3>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {object.metrics.map((metric: any, i: number) => (
+                      <Scorecard key={i} {...metric} />
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {object?.rewrites && object.rewrites.length > 0 && (
+                <section className="space-y-4 pb-12">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-lg font-medium tracking-tight">Targeted Rewrites</h3>
+                      <p className="text-sm text-muted-foreground">Alternative positioning based on findings.</p>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4">
+                    {object.rewrites.map((rewrite: any, i: number) => (
+                      <Card key={i} className="border-border/50 shadow-sm">
+                        <CardHeader className="py-3 px-4 bg-muted/20 border-b flex flex-row items-center justify-between space-y-0">
+                          <CardTitle className="text-sm font-medium">{rewrite?.title}</CardTitle>
+                          <Badge variant="secondary" className="font-normal">
+                            {rewrite?.focus}
+                          </Badge>
+                        </CardHeader>
+                        <CardContent className="p-4">
+                          <p className="text-sm leading-relaxed">{rewrite?.content}</p>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </section>
+              )}
             </div>
           )}
         </div>
